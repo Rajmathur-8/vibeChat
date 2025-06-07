@@ -10,11 +10,14 @@ This document covers the backend of the VibeChat application, including API endp
 - [Environment Variables](#environment-variables)
 - [Database Schema](#database-schema)
 - [API Endpoints](#api-endpoints)
-  - [Signup](#signup)
-  - [Login](#login)
-  - [Logout](#logout)
-  - [Update Profile](#update-profile)
-  - [Check Auth](#check-auth)
+  - [Auth: Signup](#1-signup)
+  - [Auth: Login](#2-login)
+  - [Auth: Logout](#3-logout)
+  - [Auth: Update Profile](#4-update-profile)
+  - [Auth: Check Auth](#5-check-auth)
+  - [Messaging: Get Users](#6-get-users-for-sidebar)
+  - [Messaging: Get Messages](#7-get-messages)
+  - [Messaging: Send Message](#8-send-message)
 - [Authentication Middleware](#authentication-middleware)
 - [Utilities](#utilities)
 - [Error Handling](#error-handling)
@@ -27,7 +30,8 @@ This document covers the backend of the VibeChat application, including API endp
 backend/
   └── src/
       ├── controllers/
-      │   └── auth.controller.js
+      │   ├── auth.controller.js
+      │   └── message.controller.js
       ├── lib/
       │   ├── cloudinary.js
       │   ├── db.js
@@ -35,9 +39,11 @@ backend/
       ├── middlewares/
       │   └── auth.middleware.js
       ├── models/
-      │   └── user.model.js
+      │   ├── user.model.js
+      │   └── message.model.js
       ├── routes/
-      │   └── auth.route.js
+      │   ├── auth.route.js
+      │   └── message.route.js
       └── index.js
 ```
 
@@ -69,6 +75,19 @@ CLOUDINARY_API_SECRET=your_api_secret
   email: String,      // required, unique
   password: String,   // required, min 6 chars, hashed
   profilePic: String, // optional, Cloudinary URL
+  timestamps: true
+}
+```
+
+**Message Model:**
+
+```js
+{
+  senderId: ObjectId,   // required, ref: User
+  receiverId: ObjectId, // required, ref: User
+  text: String,         // optional
+  image: String,        // optional, Cloudinary URL
+  video: String,        // optional, Cloudinary URL
   timestamps: true
 }
 ```
@@ -237,6 +256,116 @@ _No body required. JWT cookie must be present._
 
 ---
 
+### 6. Get Users for Sidebar
+
+**GET** `/api/message/users`
+
+Returns all users except the currently authenticated user. **Requires authentication.**
+
+#### Request
+
+_No body required. JWT cookie must be present._
+
+#### Response (200 OK)
+
+```json
+[
+  {
+    "_id": "665f1c...",
+    "fullName": "John Smith",
+    "email": "john@example.com",
+    "profilePic": "https://res.cloudinary.com/your_cloud/image/upload/v...",
+    "createdAt": "...",
+    "updatedAt": "...",
+    "__v": 0
+  },
+  ...
+]
+```
+
+#### Error Responses
+
+- `401`: Unauthorized (missing/invalid token).
+- `500`: Internal server error.
+
+---
+
+### 7. Get Messages
+
+**GET** `/api/message/:id`
+
+Returns all messages between the authenticated user and the user with the given `:id`. **Requires authentication.**
+
+#### Request
+
+_No body required. JWT cookie must be present._
+
+#### Response (200 OK)
+
+```json
+[
+  {
+    "_id": "666a1b...",
+    "senderId": "665f1c...",
+    "receiverId": "665f1d...",
+    "text": "Hello!",
+    "image": null,
+    "video": null,
+    "createdAt": "2024-06-07T10:00:00.000Z",
+    "updatedAt": "2024-06-07T10:00:00.000Z",
+    "__v": 0
+  },
+  ...
+]
+```
+
+#### Error Responses
+
+- `401`: Unauthorized (missing/invalid token).
+- `500`: Internal server error.
+
+---
+
+### 8. Send Message
+
+**POST** `/api/message/send/:id`
+
+Sends a message to the user with the given `:id`. **Requires authentication.**
+
+#### Request
+
+```json
+{
+  "text": "Hello!",
+  "image": "data:image/png;base64,...",   // optional, base64 string
+  "video": "data:video/mp4;base64,..."   // optional, base64 string
+}
+```
+
+#### Response (200 OK)
+
+```json
+{
+  "_id": "666a1b...",
+  "senderId": "665f1c...",
+  "receiverId": "665f1d...",
+  "text": "Hello!",
+  "image": "https://res.cloudinary.com/your_cloud/image/upload/v...", // if image sent
+  "video": "https://res.cloudinary.com/your_cloud/video/upload/v...", // if video sent
+  "createdAt": "2024-06-07T10:00:00.000Z",
+  "updatedAt": "2024-06-07T10:00:00.000Z",
+  "__v": 0
+}
+```
+
+#### Error Responses
+
+- `400`: Cannot send an empty message (no text, image, or video).
+- `401`: Unauthorized (missing/invalid token).
+- `500`: Internal server error or media upload failed.
+
+---
+
 ## Authentication Middleware
 
 - Checks for JWT in cookies.
@@ -249,7 +378,7 @@ _No body required. JWT cookie must be present._
 
 - **Password Hashing:** Uses bcryptjs for secure password storage.
 - **JWT Token:** Created and set as HTTP-only cookie for 7 days.
-- **Cloudinary Integration:** Handles image uploads for profile pictures.
+- **Cloudinary Integration:** Handles image/video uploads for profile pictures and messages.
 
 ---
 
@@ -264,6 +393,6 @@ _No body required. JWT cookie must be present._
 
 - All protected routes require the JWT cookie.
 - Use HTTPS and set `NODE_ENV=production` for secure cookies in production.
-- Profile pictures must be sent as base64-encoded strings.
+- Images and videos must be sent as base64-encoded strings.
 
 ---
